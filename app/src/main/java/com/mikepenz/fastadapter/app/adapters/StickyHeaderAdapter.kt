@@ -6,7 +6,7 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.mikepenz.fastadapter.FastAdapter
-import com.mikepenz.fastadapter.IItem
+import com.mikepenz.fastadapter.GenericItem
 import com.mikepenz.fastadapter.app.R
 import com.mikepenz.fastadapter.app.items.SimpleItem
 import com.mikepenz.fastadapter.app.items.expandable.SimpleSubExpandableItem
@@ -19,7 +19,7 @@ import java.security.SecureRandom
  * This is a FastAdapter adapter implementation for the awesome Sticky-Headers lib by timehop
  * https://github.com/timehop/sticky-headers-recyclerview
  */
-class StickyHeaderAdapter<Item : IItem<out RecyclerView.ViewHolder>> : RecyclerView.Adapter<RecyclerView.ViewHolder>(), StickyRecyclerHeadersAdapter<RecyclerView.ViewHolder> {
+class StickyHeaderAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.ViewHolder>(), StickyRecyclerHeadersAdapter<RecyclerView.ViewHolder> {
 
     //just to prettify things a bit
     private val randomColor: Int
@@ -45,11 +45,11 @@ class StickyHeaderAdapter<Item : IItem<out RecyclerView.ViewHolder>> : RecyclerV
 
         //in our sample we want a separate header per first letter of our items
         //this if is not necessary for your code, we only use it as this sticky header is reused for different item implementations
-        if (item is SimpleItem && (item as SimpleItem).header != null) {
+        if (item is SimpleItem && item.header != null) {
             return item.header?.get(0)?.toLong() ?: 0
-        } else if (item is SimpleSubItem && (item as SimpleSubItem).header != null) {
+        } else if (item is SimpleSubItem && item.header != null) {
             return item.header?.get(0)?.toLong() ?: 0
-        } else if (item is SimpleSubExpandableItem && (item as SimpleSubExpandableItem).header != null) {
+        } else if (item is SimpleSubExpandableItem && item.header != null) {
             return item.header?.get(0)?.toLong() ?: 0
         }
         return -1
@@ -66,13 +66,13 @@ class StickyHeaderAdapter<Item : IItem<out RecyclerView.ViewHolder>> : RecyclerV
         val textView = holder.itemView as TextView
 
         val item = getItem(position)
-        if (item is SimpleItem && (item as SimpleItem).header != null) {
+        if (item is SimpleItem && item.header != null) {
             //based on the position we set the headers text
             textView.text = item.header?.get(0)?.toString()
-        } else if (item is SimpleSubItem && (item as SimpleSubItem).header != null) {
+        } else if (item is SimpleSubItem && item.header != null) {
             //based on the position we set the headers text
             textView.text = item.header?.get(0)?.toString()
-        } else if (item is SimpleSubExpandableItem && (item as SimpleSubExpandableItem).header != null) {
+        } else if (item is SimpleSubExpandableItem && item.header != null) {
             //based on the position we set the headers text
             textView.text = item.header?.get(0)?.toString()
         }

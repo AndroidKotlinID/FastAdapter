@@ -1,15 +1,15 @@
 package com.mikepenz.fastadapter.utils
 
-import androidx.recyclerview.widget.RecyclerView
+import com.mikepenz.fastadapter.GenericItem
 import com.mikepenz.fastadapter.IAdapterNotifier
-import com.mikepenz.fastadapter.IItem
 import java.util.*
+import kotlin.math.min
 
 /**
  * The default item list implementation
  */
 
-open class DefaultItemListImpl<Item : IItem<out RecyclerView.ViewHolder>> @JvmOverloads constructor(
+open class DefaultItemListImpl<Item : GenericItem> @JvmOverloads constructor(
         protected var mItems: MutableList<Item> = ArrayList()
 ) : DefaultItemList<Item>() {
 
@@ -44,7 +44,7 @@ open class DefaultItemListImpl<Item : IItem<out RecyclerView.ViewHolder>> @JvmOv
         //global position to relative
         val length = mItems.size
         //make sure we do not delete to many items
-        val saveItemCount = Math.min(itemCount, length - position + preItemCount)
+        val saveItemCount = min(itemCount, length - position + preItemCount)
 
         for (i in 0 until saveItemCount) {
             mItems.removeAt(position - preItemCount)

@@ -1,18 +1,18 @@
 package com.mikepenz.fastadapter.adapters
 
 import android.widget.Filter
-import androidx.recyclerview.widget.RecyclerView
-import com.mikepenz.fastadapter.IItem
+import com.mikepenz.fastadapter.GenericItem
 import com.mikepenz.fastadapter.listeners.ItemFilterListener
 import com.mikepenz.fastadapter.select.SelectExtension
 import java.util.*
 import java.util.Arrays.asList
+import kotlin.math.min
 
 /**
  * ItemFilter which extends the Filter api provided by Android
  * This calls automatically all required methods, just overwrite the filterItems method
  */
-open class ItemFilter<Model, Item : IItem<out RecyclerView.ViewHolder>>(private val mItemAdapter: ModelAdapter<Model, Item>) :
+open class ItemFilter<Model, Item : GenericItem>(private val mItemAdapter: ModelAdapter<Model, Item>) :
         Filter() {
     private var originalItems: MutableList<Item>? = null
     var constraint: CharSequence? = null
@@ -300,7 +300,7 @@ open class ItemFilter<Model, Item : IItem<out RecyclerView.ViewHolder>>(private 
             val length = originalItems.size
             mItemAdapter.fastAdapter?.getPreItemCount(position)?.let { preItemCount ->
                 //make sure we do not delete to many items
-                val saveItemCount = Math.min(itemCount, length - position + preItemCount)
+                val saveItemCount = min(itemCount, length - position + preItemCount)
                 for (i in 0 until saveItemCount) {
                     originalItems.removeAt(position - preItemCount)
                 }
