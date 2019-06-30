@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import androidx.collection.ArrayMap
 import androidx.recyclerview.widget.RecyclerView
 import com.mikepenz.fastadapter.adapters.ItemAdapter.Companion.items
+import com.mikepenz.fastadapter.dsl.FastAdapterDsl
 import com.mikepenz.fastadapter.extensions.ExtensionsFactories
 import com.mikepenz.fastadapter.listeners.*
 import com.mikepenz.fastadapter.utils.AdapterPredicate
@@ -36,6 +37,7 @@ typealias GenericFastAdapter = FastAdapter<GenericItem>
  *
  * @param <Item> Defines the type of items this `FastAdapter` manages (in case of multiple different types, use `IItem`)</Item>
  */
+@FastAdapterDsl
 open class FastAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     // we remember all adapters
@@ -55,11 +57,14 @@ open class FastAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.V
     // the total size
     private var globalSize = 0
 
+    private var _eventHooks: MutableList<EventHook<out Item>>? = null
+
     /**
      * The eventHooks handled by this FastAdapter
      */
-    var eventHooks: MutableList<EventHook<out Item>>? = null
-        private set
+    val eventHooks: MutableList<EventHook<out Item>>
+        get() = _eventHooks ?: LinkedList<EventHook<out Item>>().also { _eventHooks = it }
+
     // the extensions we support
     private val extensionsCache = ArrayMap<Class<*>, IAdapterExtension<Item>>()
 
@@ -81,8 +86,8 @@ open class FastAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.V
     var verboseLoggingEnabled = false
 
     // the listeners which can be hooked on an item
-    var onPreClickListener: ((v: View?, adapter: IAdapter<Item>, item: Item, position: Int) -> Boolean)? = null
-    var onClickListener: ((v: View?, adapter: IAdapter<Item>, item: Item, position: Int) -> Boolean)? = null
+    var onPreClickListener: ClickListener<Item>? = null
+    var onClickListener: ClickListener<Item>? = null
     var onPreLongClickListener: ((v: View, adapter: IAdapter<Item>, item: Item, position: Int) -> Boolean)? = null
     var onLongClickListener: ((v: View, adapter: IAdapter<Item>, item: Item, position: Int) -> Boolean)? = null
     var onTouchListener: ((v: View, event: MotionEvent, adapter: IAdapter<Item>, item: Item, position: Int) -> Boolean)? = null
@@ -102,16 +107,15 @@ open class FastAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.V
      */
     open val viewClickListener: ClickEventHook<Item> = object : ClickEventHook<Item>() {
         override fun onClick(v: View, position: Int, fastAdapter: FastAdapter<Item>, item: Item) {
-            val adapter = fastAdapter.getAdapter(position)
-            if (adapter != null && item.isEnabled) {
-                if ((item as? IClickable<Item>?)?.onPreItemClickListener?.invoke(v, adapter, item, position) == true) return
-                if (fastAdapter.onPreClickListener?.invoke(v, adapter, item, position) == true) return
-                for (ext in fastAdapter.extensionsCache.values) {
-                    if (ext.onClick(v, position, fastAdapter, item)) return
-                }
-                if ((item as? IClickable<Item>?)?.onItemClickListener?.invoke(v, adapter, item, position) == true) return
-                if (fastAdapter.onClickListener?.invoke(v, adapter, item, position) == true) return
+            if (!item.isEnabled) return
+            val adapter = fastAdapter.getAdapter(position) ?: return
+            if ((item as? IClickable<Item>)?.onPreItemClickListener?.invoke(v, adapter, item, position) == true) return
+            if (fastAdapter.onPreClickListener?.invoke(v, adapter, item, position) == true) return
+            for (ext in fastAdapter.extensionsCache.values) {
+                if (ext.onClick(v, position, fastAdapter, item)) return
             }
+            if ((item as? IClickable<Item>)?.onItemClickListener?.invoke(v, adapter, item, position) == true) return
+            if (fastAdapter.onClickListener?.invoke(v, adapter, item, position) == true) return
         }
     }
 
@@ -120,14 +124,13 @@ open class FastAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.V
      */
     open val viewLongClickListener: LongClickEventHook<Item> = object : LongClickEventHook<Item>() {
         override fun onLongClick(v: View, position: Int, fastAdapter: FastAdapter<Item>, item: Item): Boolean {
-            val adapter = fastAdapter.getAdapter(position)
-            if (adapter != null && item.isEnabled) {
-                if (fastAdapter.onPreLongClickListener?.invoke(v, adapter, item, position) == true) return true
-                for (ext in fastAdapter.extensionsCache.values) {
-                    if (ext.onLongClick(v, position, fastAdapter, item)) return true
-                }
-                if (fastAdapter.onLongClickListener?.invoke(v, adapter, item, position) == true) return true
+            if (!item.isEnabled) return false
+            val adapter = fastAdapter.getAdapter(position) ?: return false
+            if (fastAdapter.onPreLongClickListener?.invoke(v, adapter, item, position) == true) return true
+            for (ext in fastAdapter.extensionsCache.values) {
+                if (ext.onLongClick(v, position, fastAdapter, item)) return true
             }
+            if (fastAdapter.onLongClickListener?.invoke(v, adapter, item, position) == true) return true
             return false
         }
     }
@@ -166,13 +169,33 @@ open class FastAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.V
      */
     open fun <A : IAdapter<Item>> addAdapter(index: Int, adapter: A): FastAdapter<Item> {
         adapters.add(index, adapter)
+        prepareAdapters(adapter)
+        return this
+    }
+
+    /**
+     * adds all new adapters at the end of the adapter list
+     *
+     * @param newAdapters the new adapters to be added
+     * @return this
+     */
+    open fun <A : IAdapter<Item>> addAdapters(newAdapters: List<A>): FastAdapter<Item> {
+        adapters.addAll(newAdapters as Collection<IAdapter<Item>>)
+        newAdapters.forEach {
+            prepareAdapters(it)
+        }
+        return this
+    }
+
+    /**
+     * prepares all adapters for their usage. update the fastAdapter, ensure all types are mapped, and update the order for the adapter.
+     * It also updates the cached sizes.
+     */
+    private fun prepareAdapters(adapter: IAdapter<Item>) {
         adapter.fastAdapter = this
         adapter.mapPossibleTypes(adapter.adapterItems)
-        for (i in adapters.indices) {
-            adapters[i].order = i
-        }
+        adapters.forEachIndexed { i, item -> item.order = i }
         cacheSizes()
-        return this
     }
 
     /**
@@ -182,9 +205,7 @@ open class FastAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.V
      * @return the IAdapter if found
      */
     open fun adapter(order: Int): IAdapter<Item>? {
-        return if (adapters.size <= order) {
-            null
-        } else adapters[order]
+        return adapters.getOrNull(order)
     }
 
     /**
@@ -235,10 +256,7 @@ open class FastAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.V
      * @return this
      */
     fun addEventHook(eventHook: EventHook<out Item>): FastAdapter<Item> {
-        if (eventHooks == null) {
-            eventHooks = LinkedList()
-        }
-        eventHooks?.add(eventHook)
+        eventHooks.add(eventHook)
         return this
     }
 
@@ -250,10 +268,7 @@ open class FastAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.V
      * @return this
      */
     fun addEventHooks(eventHooks: Collection<EventHook<out Item>>): FastAdapter<Item> {
-        if (this.eventHooks == null) {
-            this.eventHooks = LinkedList()
-        }
-        this.eventHooks?.addAll(eventHooks)
+        this.eventHooks.addAll(eventHooks)
         return this
     }
 
@@ -929,6 +944,10 @@ open class FastAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.V
             return fastAdapter
         }
 
+        @JvmStatic
+        fun <Item : GenericItem> getFromHolderTag(holder: RecyclerView.ViewHolder?): FastAdapter<Item>? =
+                holder?.itemView?.getTag(R.id.fastadapter_item_adapter) as? FastAdapter<Item>
+
         /**
          * convenient helper method to get the Item from a holder
          *
@@ -937,16 +956,11 @@ open class FastAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.V
          */
         @JvmStatic
         fun <Item : GenericItem> getHolderAdapterItem(holder: RecyclerView.ViewHolder?): Item? {
-            if (holder != null) {
-                val tag = holder.itemView.getTag(R.id.fastadapter_item_adapter)
-                if (tag is FastAdapter<*>) {
-                    val pos = tag.getHolderAdapterPosition(holder)
-                    if (pos != RecyclerView.NO_POSITION) {
-                        return tag.getItem(pos) as? Item?
-                    }
-                }
-            }
-            return null
+            holder ?: return null
+            val adapter = getFromHolderTag<Item>(holder) ?: return null
+            val pos = adapter.getHolderAdapterPosition(holder).takeIf { it != RecyclerView.NO_POSITION }
+                    ?: return null
+            return adapter.getItem(pos)
         }
 
         /**
@@ -957,15 +971,8 @@ open class FastAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.V
          * @return the Item found for the given position and that ViewHolder
          */
         @JvmStatic
-        fun <Item : GenericItem> getHolderAdapterItem(holder: RecyclerView.ViewHolder?, position: Int): Item? {
-            if (holder != null) {
-                val tag = holder.itemView.getTag(R.id.fastadapter_item_adapter)
-                if (tag is FastAdapter<*>) {
-                    return tag.getItem(position) as? Item?
-                }
-            }
-            return null
-        }
+        fun <Item : GenericItem> getHolderAdapterItem(holder: RecyclerView.ViewHolder?, position: Int): Item? =
+                getFromHolderTag<Item>(holder)?.getItem(position)
 
         /**
          * convenient helper method to get the Item from a holder via the defined tag
@@ -974,15 +981,8 @@ open class FastAdapter<Item : GenericItem> : RecyclerView.Adapter<RecyclerView.V
          * @return the Item found for the given position and that ViewHolder
          */
         @JvmStatic
-        fun <Item : GenericItem> getHolderAdapterItemTag(holder: RecyclerView.ViewHolder?): Item? {
-            if (holder != null) {
-                val item = holder.itemView.getTag(R.id.fastadapter_item)
-                if (item is GenericItem) {
-                    return item as? Item?
-                }
-            }
-            return null
-        }
+        fun <Item : GenericItem> getHolderAdapterItemTag(holder: RecyclerView.ViewHolder?): Item? =
+                holder?.itemView?.getTag(R.id.fastadapter_item) as? Item
 
         /**
          * Util function which recursively iterates over all items of a `IExpandable` parent if and only if it is `expanded` and has `subItems`
